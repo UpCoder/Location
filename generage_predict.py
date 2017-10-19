@@ -54,6 +54,6 @@ if __name__ == '__main__':
     generate_predict(
         prepare.data_dir,
         'AB榜测试集-evaluation_publicm_*.csv',
-        '/study/Game_ShopLocation/predict.csv'
+        './predict.csv'
     )
 

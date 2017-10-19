@@ -3,9 +3,8 @@ import xlrd
 import numpy as np
 import csv
 import os
-import pandas as pd
 import cPickle as pickle
-data_dir = '/study/Game_ShopLocation/data'
+data_dir = '/home/give/PycharmProjects/Location/data/data'
 shop_data_path=os.path.join(data_dir, '训练数据-ccf_first_round_shop_info.csv')
 train_user_data_path=os.path.join(data_dir, '训练数据-ccf_first_round_user_shop_behavior.csv')
 val_user_data_path = os.path.join(data_dir, 'AB榜测试集-evaluation_public.csv')
