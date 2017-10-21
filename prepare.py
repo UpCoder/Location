@@ -41,6 +41,16 @@ class Tools:
         with open(save_path, 'w') as csv_file:
             writer = csv.writer(csv_file)
             writer.writerows(lines)
+    @staticmethod
+    def sort_value_dict(dict_obj):
+        '''
+        对dictobj对象的value进行排序
+        :param dict_obj:  dict对象，value是数组类型的数据
+        :return: sorted dict
+        '''
+        for key in dict_obj.keys():
+            dict_obj[key].sort()
+        return dict_obj
 class Statics:
     '''
         封装对属性的统计操作
@@ -186,6 +196,31 @@ class Statics:
             records.insert(0, first_line)
             Tools.write_csv_file(save_path, records)
             print save_path, 'have finish saveing!'
+    '''
+        统计每个Wi-Fi信号源的强度情况
+        输出: dict对象，key是Wi-Fi信号源的id，value是输出，代表的是每次出现时的强度
+    '''
+    @staticmethod
+    def statics_wifi_strength(csv_paths, save_path):
+        wifi_id_dict = {}
+        wifi_strength_dict = {}
+        for csv_path in csv_paths:
+            lines = read_csv(csv_path)
+            for line in lines[1:]:
+                record_obj = record(','.join(line))
+                for wifi_obj in record_obj.wifis.wifi_arr:
+                    wifi_id_dict[wifi_obj.id] = 1
+                    wifi_strength_dict[wifi_obj.id] = []
+            print len(wifi_strength_dict)
+        for csv_path in csv_paths:
+            lines = read_csv(csv_path)
+            for line in lines[1:]:
+                record_obj = record(','.join(line))
+                for wifi_obj in record_obj.wifis.wifi_arr:
+                    wifi_strength_dict[wifi_obj.id].append(wifi_obj.singal)
+            print len(wifi_strength_dict)
+        Tools.save_dict(wifi_strength_dict, save_path)
+
 class wifi_info:
     '''
         封装了一个Wi-Fi信号源
@@ -238,3 +273,16 @@ class records:
         for row in rows[1:]:
             self.records.append(record(','.join(row)))
         print 'the number of record is %d, from file is %s' % (len(self.records), csv_path)
+
+if __name__ == '__main__':
+    wifi_strength_dict_path=os.path.join(data_dir, 'wifi_strength.txt')
+    # Statics.statics_wifi_strength([train_user_data_path, val_user_data_path], wifi_strength_dict_path)
+
+    wifi_strength_dict = Tools.load_dict(wifi_strength_dict_path)
+    Tools.save_dict(
+        Tools.sort_value_dict(wifi_strength_dict), wifi_strength_dict_path
+    )
+    wifi_strength_dict = Tools.load_dict(wifi_strength_dict_path)
+    for key in wifi_strength_dict.keys():
+        print len(wifi_strength_dict[key]), wifi_strength_dict[key]
+

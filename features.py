@@ -18,6 +18,7 @@ def generate_wifi_dictionary(csv_paths):
 
 '''
     根据Wi-Fi字典构建特征向量
+    依据Wi-Fi出现次数作为特征
 '''
 def generate_wifi_dict_feature(csv_path, wifi_dict):
     lines = read_csv(csv_path)
@@ -27,9 +28,23 @@ def generate_wifi_dict_feature(csv_path, wifi_dict):
         for wifi_obj in record_obj.wifis.wifi_arr:
             features[index, wifi_dict[wifi_obj.id]] += 1
     return features
-
-
-
+'''
+    根据Wi-Fi字典构建特征向量
+    依据特征向量，依句Wi-Fi出现的强度作为特征
+'''
+def generate_wifi_strength(csv_path, wifi_dict, wifi_strength_dict):
+    print 'will be finish'
+    lines = read_csv(csv_path)
+    features = np.zeros([len(lines) - 1, len(wifi_dict)], np.float32)
+    for index, line in enumerate(lines[1:]):
+        record_obj = record(','.join(line))
+        for wifi_obj in record_obj.wifis.wifi_arr:
+            wifi_id = wifi_obj.id
+            wifi_index = wifi_dict[wifi_id]
+            # 这里选取Wi-Fi信号的最大值的时候，可以考虑选择top25 的平均值
+            max_wifi_strength = wifi_strength_dict[wifi_id][-1]
+            features[index][wifi_index] += (1.0 * wifi_obj.singal) / max_wifi_strength
+    return features
 '''
     根据csv文件构建label，不同的label是不同的商铺
 '''

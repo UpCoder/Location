@@ -22,6 +22,9 @@ def rename():
                 cur_path,
                 target_path
             )
+'''
+    检查预测结果是否有rowid重复的
+'''
 def check_repeat():
     from prepare import read_csv
     lines = read_csv('/home/give/PycharmProjects/Location/predict.csv')
@@ -35,5 +38,23 @@ def check_repeat():
     for index, value in enumerate(values):
         if index != value:
             print 'Error'
+'''
+    检查是否存在同一行记录的Wi-Fi里面有重复id的现象
+'''
+def check_repeat_wifi():
+    from prepare import read_csv, data_dir, record
+    lines = read_csv(os.path.join(data_dir, 'AB榜测试集-evaluation_public.csv'))
+    for line in lines[1:]:
+        record_obj = record(','.join(line))
+        for index_i, wifi_obj_i in enumerate(record_obj.wifis.wifi_arr):
+            for index_j, wifi_obj_j in enumerate(record_obj.wifis.wifi_arr):
+                if index_i == index_j:
+                    continue
+                if wifi_obj_i.id == wifi_obj_j.id:
+                    print 'Wifi Repeat', line
+                    print wifi_obj_j.id, wifi_obj_i.id
+
+
+
 if __name__ == '__main__':
-    check_repeat()
+    check_repeat_wifi()
