@@ -2,6 +2,7 @@
 from features import *
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import accuracy_score
+from Config import Config
 
 class mySVC:
     @staticmethod
@@ -38,7 +39,7 @@ class myXgboost:
         param['eta'] = 0.1
         param['max_depth'] = 6
         param['silent'] = 1
-        param['nthread'] = 4
+        param['nthread'] = 8
         param['num_class'] = np.max(train_label) + 1
         plst = param.items()
         dTrain = xgb.DMatrix(training_data, label=train_label)
@@ -82,33 +83,35 @@ if __name__ == '__main__':
         features = np.array(features)
         features_pca = do_pca(features, n_components=n_components)
         return features_pca
-    val_file_name = '训练数据-ccf_first_round_user_shop_behaviorm_615.csv'
-    wifi_dict = generate_wifi_dictionary(
-        [os.path.join(data_dir, val_file_name)]
-    )
-    from prepare import Tools
-    wifi_strength_dict = Tools.load_dict(os.path.join(data_dir, 'wifi_strength.txt'))
-    features_wifi_show = generate_wifi_dict_feature(
-        os.path.join(data_dir, val_file_name),
-        wifi_dict
-    )
-    features_wifi_strength = generate_wifi_strength(
-        os.path.join(data_dir, val_file_name),
-        wifi_dict,
-        wifi_strength_dict
-    )
-    labels, shops_id = generate_label(
-        os.path.join(data_dir, val_file_name),
-        os.path.join(data_dir, 'mail_shop.txt'),
-        os.path.join(data_dir, 'shop_mail.txt')
-    )
-    labels = np.array(labels)
+    mail_id = 'm_615'
+    training_file_name = '训练数据-ccf_first_round_user_shop_behavior'+ mail_id +'.csv'
+    val_file_name = 'AB榜测试集-evaluation_public' + mail_id +'.csv'
 
-    features = np.concatenate(
-        [do_pca_one_feature(features_wifi_show), do_pca_one_feature(features_wifi_strength)],
-        axis=1)
-    print np.shape(features)
-    print np.shape(labels)
+    '''
+        测试版本2特征的效果
+    '''
+    from generage_predict import extract_features_version3
+    train_features_wifi, train_labels_wifi, _, _ = extract_features_version3(
+        path=os.path.join(Config.data_dir, val_file_name),
+        mail_id=mail_id,
+        n_components=100
+    )
 
-
-    KCrossValidation.do(features, labels, myXgboost.do, 'svm')
+    '''
+        测试版本3特征的效果
+    '''
+    # from generage_predict import extract_features_version3
+    #
+    # train_features_distance, train_labels_distance, _, _ = extract_features_version3(
+    #     path=os.path.join(Config.data_dir, val_file_name),
+    #     mail_id=mail_id
+    # )
+    # train_features_distance = np.array(train_features_distance)
+    # train_labels_distance = np.array(train_labels_distance)
+    # print np.shape(train_labels_wifi), np.shape(train_labels_distance)
+    # if not (train_labels_wifi == train_labels_distance).all():
+    #     print 'Error, label is not equal'
+    #  train_features = np.concatenate([train_features_wifi, train_features_distance], axis=1)
+    train_features = train_features_wifi
+    print np.shape(train_features)
+    KCrossValidation.do(train_features, train_labels_wifi, myXgboost.do, 'svm')

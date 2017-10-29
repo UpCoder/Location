@@ -4,10 +4,8 @@ import numpy as np
 import csv
 import os
 import cPickle as pickle
-data_dir = '/home/give/PycharmProjects/Location/data/data'
-shop_data_path=os.path.join(data_dir, '训练数据-ccf_first_round_shop_info.csv')
-train_user_data_path=os.path.join(data_dir, '训练数据-ccf_first_round_user_shop_behavior.csv')
-val_user_data_path = os.path.join(data_dir, 'AB榜测试集-evaluation_public.csv')
+from math import sqrt, radians, sin, asin, cos
+from Config import Config
 def read_csv(excel_path):
     with open(excel_path, 'rb') as f:
         # 采用b的方式处理可以省去很多问题
@@ -21,6 +19,17 @@ class Tools:
     '''
         封装一些常用的操作
     '''
+    @staticmethod
+    def MaxMinNormalization(x, Max, Min):
+        '''
+            对一组向量进行归一化
+        :param x:  向量
+        :param Max: 最大值
+        :param Min: 最小值
+        :return:
+        '''
+        x = (x - Min) / (Max - Min)
+        return x
     @staticmethod
     def save_dict(dict_obj, save_path):
         '''
@@ -51,6 +60,22 @@ class Tools:
         for key in dict_obj.keys():
             dict_obj[key].sort()
         return dict_obj
+
+    '''
+        计算两个经纬度之间的距离
+        返回距离的单位是km
+    '''
+    @staticmethod
+    def haversine(lon1, lat1, lon2, lat2):  # 经度1，纬度1，经度2，纬度2 （十进制度数）
+        # 将十进制度数转化为弧度
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+        # haversine公式
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        c = 2 * asin(sqrt(a))
+        r = 6371  # 地球平均半径，单位为公里
+        return c * r
 class Statics:
     '''
         封装对属性的统计操作
@@ -221,6 +246,76 @@ class Statics:
             print len(wifi_strength_dict)
         Tools.save_dict(wifi_strength_dict, save_path)
 
+    '''
+        统计每个商铺的位置
+        :params shop_info_csv 商铺的信息csv
+        :params save_dict_path 保存dict的路径
+        返回一个dict对象,key是shopid，value是经纬度信息，value[0]是经度，value[1]是纬度
+    '''
+    @staticmethod
+    def statics_shop_longtitude_latitude(shop_info_csv, save_dict_path):
+        lines = read_csv(shop_info_csv)
+        shop_longitude_latitude_dict = {}
+        for line in lines[1:]:
+            shop_id = line[0]
+            longitude = float(line[2])
+            latitude = float(line[3])
+            shop_longitude_latitude_dict[shop_id] = [longitude, latitude]
+        if save_dict_path is not None:
+            Tools.save_dict(shop_longitude_latitude_dict, save_dict_path)
+        return shop_longitude_latitude_dict
+
+    '''
+        统计记录文件中出现的所有User
+        :param csv_path 存有记录的csv文件
+        :param is_training 文件是training格式还是val格式
+    '''
+    @staticmethod
+    def statics_user_shown(csv_path, is_training):
+        records_obj = records(csv_path, is_training)
+        user_set = set()
+        for record_obj in records_obj.records:
+            user_set.add(record_obj.user_id)
+        return list(user_set)
+    '''
+        统计出现过的移动Wi-Fi的Wi-FiID
+        如何判别一个Wi-Fi是不是移动Wi-Fi热点：看同一个Wi-FiID是否在其它商场出现过
+        csv_paths 代表的是不同的商场的记录文件，例如['./AB榜测试集-evaluation_publicm_2578.csv']
+        save_path 是指找到的每个商场的固定的Wi-Fi的dict的存储路径，key是mailID val是出现过的Wi-FiID
+    '''
+    @staticmethod
+    def statics_notmobile_wifi(csv_paths, save_path):
+        wifi_everymail = {}
+        for csv_path in csv_paths:
+            records_obj = records(csv_path)
+            cur_wifi_set = set()
+            for record_obj in records_obj.records:
+                for wifi_obj in record_obj.wifis.wifi_arr:
+                    cur_wifi_set.add(wifi_obj.id)
+            basename = os.path.basename(csv_path)
+            mailid = basename[basename.find('m_'):basename.find('.csv')]
+            if mailid in wifi_everymail.keys():
+                wifi_everymail[mailid] = wifi_everymail[mailid] | cur_wifi_set
+            else:
+                wifi_everymail[mailid] = cur_wifi_set
+        print 'We have find the set of wifi shown in every mail'
+        # So far, 我们已经找到了每个商场在训练集和测试集出现的所有Wi-Fi的ID集合
+        notmobilewifi_everymail = {}    # 找出每个商场的固定Wi-Fi
+        for mailid in wifi_everymail.keys():
+            cur_wifi_set = wifi_everymail[mailid]
+            for mailid1 in wifi_everymail.keys():
+                if mailid1 == mailid:
+                    continue
+                # 排除在其它商场出现的Wi-Fi
+                cur_wifi_set = cur_wifi_set - (cur_wifi_set & wifi_everymail[mailid1])
+            notmobilewifi_everymail[mailid] = cur_wifi_set
+            print 'had find the not mobile wifi set in ', mailid, \
+                'the size of all shown wifi is ', len(wifi_everymail[mailid]), \
+                'the size of not mobile wifi is', len(cur_wifi_set)
+        Tools.save_dict(
+            notmobilewifi_everymail,
+            save_path
+        )
 class wifi_info:
     '''
         封装了一个Wi-Fi信号源
@@ -254,35 +349,60 @@ class record:
     '''
         代表一条记录
     '''
-    def __init__(self, string):
-        self.string = string
-        splits_arr = self.string.split(',')
-        self.user_id = splits_arr[0]
-        self.shop_id = splits_arr[1]
-        self.time_stamp = splits_arr[2]
-        self.longitude = splits_arr[3]
-        self.latitude = splits_arr[4]
-        self.wifis = wifis(splits_arr[-1])
+    def __init__(self, string, is_training=True):
+        # if is_training:
+        # self.string = string
+        # splits_arr = self.string.split(',')
+        # self.user_id = splits_arr[0]
+        # self.shop_id = splits_arr[1]
+        # self.time_stamp = splits_arr[2]
+        # self.longitude = splits_arr[3]
+        # self.latitude = splits_arr[4]
+        # self.wifis = wifis(splits_arr[-1])
+        if is_training:
+            self.string = string
+            splits_arr = self.string.split(',')
+            self.user_id = splits_arr[0]
+            self.shop_id = splits_arr[1]
+            self.time_stamp = splits_arr[2]
+            self.longitude = splits_arr[3]
+            self.latitude = splits_arr[4]
+            self.wifis = wifis(splits_arr[-1])
+        else:
+            self.string = string
+            splits_arr = self.string.split(',')
+            self.row_id = splits_arr[0]
+            self.user_id = splits_arr[1]
+            self.mail_id = splits_arr[2]
+            self.time_stamp = splits_arr[3]
+            self.longitude = splits_arr[4]
+            self.latitude = splits_arr[5]
+            self.wifis = wifis(splits_arr[-1])
 class records:
     '''
         代表一个集合的数据
     '''
-    def __init__(self,csv_path):
+    def __init__(self,csv_path, is_training=True):
         rows = read_csv(csv_path)
         self.records = []
         for row in rows[1:]:
-            self.records.append(record(','.join(row)))
+            self.records.append(record(','.join(row), is_training))
         print 'the number of record is %d, from file is %s' % (len(self.records), csv_path)
 
 if __name__ == '__main__':
-    wifi_strength_dict_path=os.path.join(data_dir, 'wifi_strength.txt')
-    # Statics.statics_wifi_strength([train_user_data_path, val_user_data_path], wifi_strength_dict_path)
-
-    wifi_strength_dict = Tools.load_dict(wifi_strength_dict_path)
-    Tools.save_dict(
-        Tools.sort_value_dict(wifi_strength_dict), wifi_strength_dict_path
+    # Statics.statics_shop_longtitude_latitude(
+    #     shop_info_csv=Config.shop_data_path,
+    #     save_dict_path=os.path.join(Config.data_dir, 'shop_longitude_latitude.txt')
+    # )
+    # from glob import glob
+    # csv_paths = glob(os.path.join(Config.data_dir, '*m_*.csv'))
+    # Statics.statics_notmobile_wifi(
+    #     csv_paths,
+    #     os.path.join(Config.data_dir, 'mail_notMobileWifi.txt')
+    # )
+    Statics.statics_different_mail(
+        os.path.join(Config.data_dir, 'show', 'AB榜测试集-evaluation_public_not_shown.csv'),
+        os.path.join(Config.data_dir, 'show', 'not_shown'),
+        is_training=False
     )
-    wifi_strength_dict = Tools.load_dict(wifi_strength_dict_path)
-    for key in wifi_strength_dict.keys():
-        print len(wifi_strength_dict[key]), wifi_strength_dict[key]
 
